@@ -2,6 +2,8 @@ from typing import Optional
 
 from fastapi import FastAPI, Query, HTTPException
 
+from pydantic import BaseModel
+
 from data import (
     accounts,
     sales_reps,
@@ -171,3 +173,15 @@ def simulate_failure():
         status_code=500,
         detail="Simulated source-system failure"
     )
+
+class DealUpdateRequest(BaseModel):
+    deal_id: int
+    stage: str | None = None
+    deal_value: float | None = None
+
+
+class NewDealRequest(BaseModel):
+    account_id: int
+    deal_name: str
+    stage: str
+    deal_value: float

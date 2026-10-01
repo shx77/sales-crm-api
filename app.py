@@ -290,4 +290,135 @@ def get_touches(
             detail="page must be greater than 0",
         )
 
-    if page
+    if page_size < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page_size must be greater than 0",
+        )
+
+    filtered = filter_updated_since(
+        touches,
+        updated_since
+    )
+
+    return paginate(
+        filtered,
+        page,
+        page_size
+    )
+
+
+# ---------------------------------------------------------
+# Deal history
+# ---------------------------------------------------------
+
+@app.get("/deal-history")
+def get_deal_history(
+    page: int = 1,
+    page_size: int = 100,
+    updated_since: Optional[str] = None,
+):
+
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page must be greater than 0",
+        )
+
+    if page_size < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page_size must be greater than 0",
+        )
+
+    filtered = filter_updated_since(
+        deal_history,
+        updated_since
+    )
+
+    return paginate(
+        filtered,
+        page,
+        page_size
+    )
+
+
+# ---------------------------------------------------------
+# Source-change simulation
+# ---------------------------------------------------------
+
+@app.post("/simulate/update-deal")
+def simulate_update_deal(
+    request: DealUpdateRequest
+):
+
+    updated = update_deal(
+        request.deal_id,
+        request.stage,
+        request.deal_value,
+    )
+
+    if updated is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Deal {request.deal_id} "
+                "not found"
+            ),
+        )
+
+    return {
+        "message": "Deal updated",
+        "deal": updated,
+    }
+
+
+@app.post("/simulate/new-deal")
+def simulate_new_deal(
+    request: NewDealRequest
+):
+
+    new_deal = create_deal(
+        request.account_id,
+        request.deal_name,
+        request.stage,
+        request.deal_value,
+    )
+
+    return {
+        "message": "Deal created",
+        "deal": new_deal,
+    }
+
+
+@app.post("/simulate/new-touch")
+def simulate_new_touch(
+    request: NewTouchRequest
+):
+
+    new_touch = create_touch(
+        request.account_id,
+        request.touch_date,
+        request.touch_type,
+        request.touch_value,
+        request.sales_rep_id,
+    )
+
+    return {
+        "message": "Touch created",
+        "touch": new_touch,
+    }
+
+
+# ---------------------------------------------------------
+# Failure simulation
+# ---------------------------------------------------------
+
+@app.get("/simulate/failure")
+def simulate_failure():
+
+    raise HTTPException(
+        status_code=500,
+        detail="Simulated source system failure",
+    )

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import random
+from datetime import datetime, timezone
+import copy
 
 SEED = 20261001
 rng = random.Random(SEED)
@@ -227,3 +229,57 @@ touches.append({
     "sales_rep_id": 1,
     "updated_at": "2026-10-01T12:00:00"
 })
+
+
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def update_deal(deals, deal_id, new_stage=None, new_value=None):
+    """
+    Simulate an update to an existing CRM deal.
+
+    Returns the updated deal or None if the deal does not exist.
+    """
+
+    for deal in deals:
+        if deal["deal_id"] == deal_id:
+
+            if new_stage is not None:
+                deal["stage"] = new_stage
+
+            if new_value is not None:
+                deal["deal_value"] = new_value
+
+            deal["updated_at"] = utc_now()
+
+            return copy.deepcopy(deal)
+
+    return None
+
+
+def create_deal(deals, account_id, deal_name, stage, deal_value):
+    """
+    Simulate creation of a new CRM deal.
+    """
+
+    existing_ids = [deal["deal_id"] for deal in deals]
+
+    next_id = max(existing_ids) + 1 if existing_ids else 1
+
+    new_deal = {
+        "deal_id": next_id,
+        "account_id": account_id,
+        "deal_name": deal_name,
+        "stage": stage,
+        "deal_value": deal_value,
+        "open_date": utc_now()[:10],
+        "close_date": None,
+        "updated_at": utc_now(),
+    }
+
+    deals.append(new_deal)
+
+    return copy.deepcopy(new_deal)

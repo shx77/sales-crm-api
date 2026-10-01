@@ -1,250 +1,324 @@
-from datetime import datetime, timedelta
-import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import copy
+import random
+
+
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
 
 SEED = 20261001
-rng = random.Random(SEED)
 
-START = datetime(2026, 9, 1, 8, 0, 0)
+random.seed(SEED)
 
-INDUSTRIES = [
-    "SaaS", "Retail", "Healthcare",
-    "Finance", "Logistics", "Manufacturing"
+
+# ---------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------
+
+def utc_now():
+    """
+    Return the current UTC timestamp without microseconds.
+    """
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def random_date(start_date, end_date):
+    """
+    Generate a random date between two dates.
+    """
+    delta = end_date - start_date
+    random_days = random.randint(0, delta.days)
+
+    return (start_date + timedelta(days=random_days)).date().isoformat()
+
+
+# ---------------------------------------------------------
+# Reference data
+# ---------------------------------------------------------
+
+industries = [
+    "Technology",
+    "Healthcare",
+    "Finance",
+    "Retail",
+    "Manufacturing",
+    "Logistics",
 ]
 
-COUNTRIES = [
-    "Egypt", "UAE", "Saudi Arabia",
-    "Jordan", "United Kingdom"
+countries = [
+    "Egypt",
+    "UAE",
+    "Saudi Arabia",
+    "United Kingdom",
+    "United States",
 ]
 
-REGIONS = ["North", "South", "East", "West"]
-
-TOUCH_TYPES = [
-    "Call", "Email", "Meeting", "Demo", "LinkedIn"
+regions = [
+    "North",
+    "South",
+    "East",
+    "West",
+    "Central",
 ]
 
-STAGES = [
-    "Lead", "Qualified", "Proposal",
-    "Negotiation", "Won", "Lost"
+stages = [
+    "Lead",
+    "Qualified",
+    "Proposal",
+    "Negotiation",
+    "Won",
+    "Lost",
 ]
 
-
-# -------------------------
-# Sales reps
-# -------------------------
-
-sales_reps = [
-    {
-        "sales_rep_id": i,
-        "rep_name": name,
-        "region": REGIONS[(i - 1) % len(REGIONS)],
-        "updated_at": (
-            START + timedelta(days=i)
-        ).isoformat()
-    }
-    for i, name in enumerate(
-        [
-            "Ahmed Hassan",
-            "Maya Johnson",
-            "Omar Ali",
-            "Sara Smith",
-            "Daniel Brown"
-        ],
-        start=1
-    )
+touch_types = [
+    "Call",
+    "Email",
+    "Meeting",
+    "Demo",
 ]
 
 
-# -------------------------
-# Accounts
-# -------------------------
+# ---------------------------------------------------------
+# Sales Representatives
+# ---------------------------------------------------------
 
-accounts = []
+sales_reps = []
 
-for account_id in range(1, 101):
+for rep_id in range(1, 6):
 
-    created = START + timedelta(
-        days=rng.randint(0, 20)
-    )
-
-    accounts.append({
-        "account_id": account_id,
-        "account_name": f"Account {account_id:04d}",
-        "industry": rng.choice(INDUSTRIES),
-        "country": rng.choice(COUNTRIES),
-        "created_date": created.date().isoformat(),
-        "sales_rep_id": rng.randint(
-            1,
-            len(sales_reps)
-        ),
-        "updated_at": (
-            created +
-            timedelta(days=rng.randint(0, 10))
-        ).isoformat()
+    sales_reps.append({
+        "sales_rep_id": rep_id,
+        "rep_name": f"Sales Rep {rep_id}",
+        "region": regions[(rep_id - 1) % len(regions)],
+        "updated_at": "2026-09-01T08:00:00+00:00",
     })
 
 
-# -------------------------
+# ---------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------
+
+accounts = []
+
+account_start = datetime(2025, 1, 1)
+account_end = datetime(2026, 9, 30)
+
+for account_id in range(1, 101):
+
+    accounts.append({
+        "account_id": account_id,
+        "account_name": f"Account {account_id}",
+        "industry": random.choice(industries),
+        "country": random.choice(countries),
+        "created_date": random_date(
+            account_start,
+            account_end
+        ),
+        "sales_rep_id": random.randint(1, 5),
+        "updated_at": random_date(
+            datetime(2026, 1, 1),
+            datetime(2026, 9, 30)
+        ) + "T08:00:00+00:00",
+    })
+
+
+# ---------------------------------------------------------
 # Deals
-# -------------------------
+# ---------------------------------------------------------
 
 deals = []
-deal_history = []
 
 deal_id = 1
-history_id = 1
 
 for account in accounts:
 
-    for _ in range(rng.randint(1, 5)):
+    number_of_deals = random.randint(1, 5)
 
-        open_dt = START + timedelta(
-            days=rng.randint(0, 30)
+    for deal_number in range(1, number_of_deals + 1):
+
+        open_date = datetime(
+            2025,
+            random.randint(1, 12),
+            random.randint(1, 28)
         )
 
-        stage = rng.choice(STAGES)
+        stage = random.choice(stages)
 
-        value = round(
-            rng.uniform(3000, 100000),
-            2
-        )
+        close_date = None
 
-        updated = open_dt + timedelta(
-            days=rng.randint(0, 20)
-        )
+        if stage in ["Won", "Lost"]:
+            close_date = (
+                open_date
+                + timedelta(days=random.randint(15, 180))
+            ).date().isoformat()
 
-        deal = {
+        deals.append({
             "deal_id": deal_id,
             "account_id": account["account_id"],
-            "deal_name": f"Deal {deal_id:05d}",
-            "stage": stage,
-            "deal_value": value,
-            "open_date": open_dt.date().isoformat(),
-            "close_date": (
-                (
-                    open_dt +
-                    timedelta(days=rng.randint(10, 90))
-                ).date().isoformat()
-                if stage in {"Won", "Lost"}
-                else None
+            "deal_name": (
+                f"Deal {deal_id} - "
+                f"{account['account_name']}"
             ),
-            "updated_at": updated.isoformat()
-        }
-
-        deals.append(deal)
-
-        # Stage history
-        if stage != "Lead":
-
-            deal_history.append({
-                "history_id": history_id,
-                "deal_id": deal_id,
-                "old_stage": "Lead",
-                "new_stage": stage,
-                "change_date": updated.date().isoformat(),
-                "updated_at": updated.isoformat()
-            })
-
-            history_id += 1
+            "stage": stage,
+            "deal_value": round(
+                random.uniform(5000, 250000),
+                2
+            ),
+            "open_date": open_date.date().isoformat(),
+            "close_date": close_date,
+            "updated_at": random_date(
+                datetime(2026, 1, 1),
+                datetime(2026, 9, 30)
+            ) + "T08:00:00+00:00",
+        })
 
         deal_id += 1
 
 
-# -------------------------
+# ---------------------------------------------------------
 # Touches
-# -------------------------
+# ---------------------------------------------------------
 
 touches = []
+
 touch_id = 1
 
 for account in accounts:
 
-    for _ in range(rng.randint(5, 20)):
+    number_of_touches = random.randint(5, 20)
 
-        touch_dt = START + timedelta(
-            days=rng.randint(0, 45),
-            hours=rng.randint(0, 9)
-        )
+    for _ in range(number_of_touches):
 
         touches.append({
             "touch_id": touch_id,
             "account_id": account["account_id"],
-            "touch_date": touch_dt.date().isoformat(),
-            "touch_type": rng.choice(TOUCH_TYPES),
+            "touch_date": random_date(
+                datetime(2026, 1, 1),
+                datetime(2026, 9, 30)
+            ),
+            "touch_type": random.choice(touch_types),
             "touch_value": round(
-                rng.uniform(0, 5000),
+                random.uniform(100, 5000),
                 2
             ),
-            "sales_rep_id": account["sales_rep_id"],
-            "updated_at": (
-                touch_dt +
-                timedelta(hours=rng.randint(1, 48))
-            ).isoformat()
+            "sales_rep_id": random.randint(1, 5),
+            "updated_at": random_date(
+                datetime(2026, 1, 1),
+                datetime(2026, 9, 30)
+            ) + "T08:00:00+00:00",
         })
 
         touch_id += 1
 
 
-# ==================================================
-# INTENTIONAL TEST DATA
-# ==================================================
+# ---------------------------------------------------------
+# Intentional data-quality issues
+# ---------------------------------------------------------
 
-# Duplicate
-if touches:
-    touches.append(dict(touches[0]))
+# 1. Duplicate touch
+if len(touches) >= 2:
+
+    duplicate_touch = copy.deepcopy(touches[0])
+
+    duplicate_touch["touch_id"] = touches[-1]["touch_id"] + 1
+
+    touches.append(duplicate_touch)
 
 
-# Missing account_id
+# 2. Missing account_id
 touches.append({
-    "touch_id": 999001,
+    "touch_id": len(touches) + 1,
     "account_id": None,
-    "touch_date": "2026-10-01",
-    "touch_type": "Call",
-    "touch_value": 100,
-    "sales_rep_id": 1,
-    "updated_at": "2026-10-01T10:00:00"
-})
-
-
-# Invalid date
-touches.append({
-    "touch_id": 999002,
-    "account_id": 1,
-    "touch_date": "NOT_A_DATE",
+    "touch_date": "2026-09-15",
     "touch_type": "Email",
-    "touch_value": 200,
+    "touch_value": 500,
     "sales_rep_id": 1,
-    "updated_at": "2026-10-01T11:00:00"
+    "updated_at": "2026-09-15T08:00:00+00:00",
 })
 
 
-# Negative value
+# 3. Invalid date
 touches.append({
-    "touch_id": 999003,
-    "account_id": 1,
-    "touch_date": "2026-10-01",
-    "touch_type": "Meeting",
-    "touch_value": -500,
-    "sales_rep_id": 1,
-    "updated_at": "2026-10-01T12:00:00"
+    "touch_id": len(touches) + 1,
+    "account_id": 10,
+    "touch_date": "NOT_A_DATE",
+    "touch_type": "Call",
+    "touch_value": 300,
+    "sales_rep_id": 2,
+    "updated_at": "2026-09-16T08:00:00+00:00",
 })
 
 
+# 4. Negative value
+touches.append({
+    "touch_id": len(touches) + 1,
+    "account_id": 20,
+    "touch_date": "2026-09-17",
+    "touch_type": "Meeting",
+    "touch_value": -1000,
+    "sales_rep_id": 3,
+    "updated_at": "2026-09-17T08:00:00+00:00",
+})
 
 
-def utc_now():
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+# ---------------------------------------------------------
+# Deal history
+# ---------------------------------------------------------
+
+deal_history = []
+
+history_id = 1
+
+for deal in deals:
+
+    number_of_history_records = random.randint(1, 3)
+
+    previous_stage = "Lead"
+
+    for history_number in range(
+        number_of_history_records
+    ):
+
+        new_stage = random.choice(stages)
+
+        deal_history.append({
+            "history_id": history_id,
+            "deal_id": deal["deal_id"],
+            "old_stage": previous_stage,
+            "new_stage": new_stage,
+            "change_date": random_date(
+                datetime(2026, 1, 1),
+                datetime(2026, 9, 30)
+            ),
+            "updated_at": random_date(
+                datetime(2026, 1, 1),
+                datetime(2026, 9, 30)
+            ) + "T08:00:00+00:00",
+        })
+
+        previous_stage = new_stage
+        history_id += 1
 
 
-def update_deal(deals, deal_id, new_stage=None, new_value=None):
+# ---------------------------------------------------------
+# Source-change simulation
+# ---------------------------------------------------------
+
+def update_deal(
+    deal_id,
+    new_stage=None,
+    new_value=None
+):
     """
-    Simulate an update to an existing CRM deal.
+    Update an existing deal and change updated_at.
 
-    Returns the updated deal or None if the deal does not exist.
+    This simulates a CRM record being modified after
+    the previous pipeline run.
     """
 
     for deal in deals:
+
         if deal["deal_id"] == deal_id:
 
             if new_stage is not None:
@@ -260,14 +334,31 @@ def update_deal(deals, deal_id, new_stage=None, new_value=None):
     return None
 
 
-def create_deal(deals, account_id, deal_name, stage, deal_value):
+def create_deal(
+    account_id,
+    deal_name,
+    stage,
+    deal_value
+):
     """
-    Simulate creation of a new CRM deal.
+    Create a new CRM deal.
+
+    The new record receives a new ID and the current
+    updated_at timestamp.
     """
 
-    existing_ids = [deal["deal_id"] for deal in deals]
+    existing_ids = [
+        deal["deal_id"]
+        for deal in deals
+    ]
 
-    next_id = max(existing_ids) + 1 if existing_ids else 1
+    next_id = (
+        max(existing_ids) + 1
+        if existing_ids
+        else 1
+    )
+
+    now = utc_now()
 
     new_deal = {
         "deal_id": next_id,
@@ -275,11 +366,48 @@ def create_deal(deals, account_id, deal_name, stage, deal_value):
         "deal_name": deal_name,
         "stage": stage,
         "deal_value": deal_value,
-        "open_date": utc_now()[:10],
+        "open_date": now[:10],
         "close_date": None,
-        "updated_at": utc_now(),
+        "updated_at": now,
     }
 
     deals.append(new_deal)
 
     return copy.deepcopy(new_deal)
+
+
+def create_touch(
+    account_id,
+    touch_date,
+    touch_type,
+    touch_value,
+    sales_rep_id
+):
+    """
+    Create a new CRM touch.
+    """
+
+    existing_ids = [
+        touch["touch_id"]
+        for touch in touches
+    ]
+
+    next_id = (
+        max(existing_ids) + 1
+        if existing_ids
+        else 1
+    )
+
+    new_touch = {
+        "touch_id": next_id,
+        "account_id": account_id,
+        "touch_date": touch_date,
+        "touch_type": touch_type,
+        "touch_value": touch_value,
+        "sales_rep_id": sales_rep_id,
+        "updated_at": utc_now(),
+    }
+
+    touches.append(new_touch)
+
+    return copy.deepcopy(new_touch)

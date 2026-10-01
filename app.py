@@ -1,7 +1,7 @@
+from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, Query, HTTPException
-
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from data import (
@@ -10,62 +10,146 @@ from data import (
     deals,
     touches,
     deal_history,
+    update_deal,
+    create_deal,
+    create_touch,
 )
 
+
+# ---------------------------------------------------------
+# FastAPI application
+# ---------------------------------------------------------
 
 app = FastAPI(
     title="Sales CRM Source API",
-    description="Synthetic CRM source system",
-    version="1.0.0"
+    description=(
+        "Simulated Sales CRM source system for "
+        "an end-to-end Data Engineering pipeline."
+    ),
+    version="1.0.0",
 )
 
 
-def paginate(rows, page, page_size):
+# ---------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------
+
+def paginate(
+    data,
+    page: int,
+    page_size: int
+):
+    """
+    Apply simple page-based pagination.
+    """
 
     start = (page - 1) * page_size
     end = start + page_size
 
-    page_rows = rows[start:end]
-
-    has_more = end < len(rows)
-
     return {
-        "data": page_rows,
         "page": page,
         "page_size": page_size,
-        "total": len(rows),
-        "has_more": has_more,
-        "next_page": page + 1 if has_more else None
+        "total_records": len(data),
+        "data": data[start:end],
     }
 
 
-def filter_updated(rows, updated_since):
+def filter_updated_since(
+    data,
+    updated_since: Optional[str]
+):
+    """
+    Return records where updated_at is greater than
+    the supplied watermark.
+
+    If no watermark is provided, return all records.
+    """
 
     if not updated_since:
-        return rows
+        return data
 
-    from datetime import datetime
+    try:
+        cutoff = datetime.fromisoformat(
+            updated_since.replace("Z", "+00:00")
+        )
 
-    cutoff = datetime.fromisoformat(
-        updated_since
-    )
+    except ValueError:
 
-    return [
-        row
-        for row in rows
-        if datetime.fromisoformat(
-            row["updated_at"]
-        ) > cutoff
-    ]
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid updated_since format. "
+                "Use ISO 8601, for example: "
+                "2026-10-01T00:00:00+00:00"
+            ),
+        )
 
+    filtered = []
+
+    for record in data:
+
+        updated_at = datetime.fromisoformat(
+            record["updated_at"].replace(
+                "Z",
+                "+00:00"
+            )
+        )
+
+        if updated_at > cutoff:
+            filtered.append(record)
+
+    return filtered
+
+
+# ---------------------------------------------------------
+# Request models
+# ---------------------------------------------------------
+
+class DealUpdateRequest(BaseModel):
+
+    deal_id: int
+
+    stage: Optional[str] = None
+
+    deal_value: Optional[float] = None
+
+
+class NewDealRequest(BaseModel):
+
+    account_id: int
+
+    deal_name: str
+
+    stage: str
+
+    deal_value: float
+
+
+class NewTouchRequest(BaseModel):
+
+    account_id: int
+
+    touch_date: str
+
+    touch_type: str
+
+    touch_value: float
+
+    sales_rep_id: int
+
+
+# ---------------------------------------------------------
+# General endpoints
+# ---------------------------------------------------------
 
 @app.get("/")
 def root():
 
     return {
         "service": "Sales CRM Source API",
-        "status": "ok",
-        "docs": "/docs"
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
     }
 
 
@@ -73,34 +157,79 @@ def root():
 def health():
 
     return {
-        "status": "healthy"
+        "status": "ok"
     }
 
 
+@app.get("/source/status")
+def source_status():
+
+    return {
+        "accounts": len(accounts),
+        "sales_reps": len(sales_reps),
+        "deals": len(deals),
+        "touches": len(touches),
+        "deal_history": len(deal_history),
+        "source_state": "in_memory",
+    }
+
+
+# ---------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------
+
 @app.get("/accounts")
 def get_accounts(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
-    updated_since: Optional[str] = None
+    page: int = 1,
+    page_size: int = 100,
+    updated_since: Optional[str] = None,
 ):
 
-    rows = filter_updated(
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page must be greater than 0",
+        )
+
+    if page_size < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page_size must be greater than 0",
+        )
+
+    filtered = filter_updated_since(
         accounts,
         updated_since
     )
 
     return paginate(
-        rows,
+        filtered,
         page,
         page_size
     )
 
 
+# ---------------------------------------------------------
+# Sales Representatives
+# ---------------------------------------------------------
+
 @app.get("/sales-reps")
 def get_sales_reps(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000)
+    page: int = 1,
+    page_size: int = 100,
 ):
+
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page must be greater than 0",
+        )
+
+    if page_size < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page_size must be greater than 0",
+        )
 
     return paginate(
         sales_reps,
@@ -109,79 +238,56 @@ def get_sales_reps(
     )
 
 
+# ---------------------------------------------------------
+# Deals
+# ---------------------------------------------------------
+
 @app.get("/deals")
 def get_deals(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
-    updated_since: Optional[str] = None
+    page: int = 1,
+    page_size: int = 100,
+    updated_since: Optional[str] = None,
 ):
 
-    rows = filter_updated(
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page must be greater than 0",
+        )
+
+    if page_size < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page_size must be greater than 0",
+        )
+
+    filtered = filter_updated_since(
         deals,
         updated_since
     )
 
     return paginate(
-        rows,
+        filtered,
         page,
         page_size
     )
 
+
+# ---------------------------------------------------------
+# Touches
+# ---------------------------------------------------------
 
 @app.get("/touches")
 def get_touches(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
-    updated_since: Optional[str] = None
+    page: int = 1,
+    page_size: int = 100,
+    updated_since: Optional[str] = None,
 ):
 
-    rows = filter_updated(
-        touches,
-        updated_since
-    )
+    if page < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="page must be greater than 0",
+        )
 
-    return paginate(
-        rows,
-        page,
-        page_size
-    )
-
-
-@app.get("/deal-history")
-def get_deal_history(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(100, ge=1, le=1000),
-    updated_since: Optional[str] = None
-):
-
-    rows = filter_updated(
-        deal_history,
-        updated_since
-    )
-
-    return paginate(
-        rows,
-        page,
-        page_size
-    )
-
-
-@app.get("/simulate/failure")
-def simulate_failure():
-
-    raise HTTPException(
-        status_code=500,
-        detail="Simulated source-system failure"
-    )
-
-class DealUpdateRequest(BaseModel):
-    deal_id: int
-    stage: str | None = None
-    deal_value: float | None = None
-
-
-class NewDealRequest(BaseModel):
-    account_id: int
-    deal_name: str
-    stage: str
-    deal_value: float
+    if page

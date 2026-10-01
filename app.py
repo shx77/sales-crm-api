@@ -15,42 +15,53 @@ from data import (
     create_touch,
 )
 
-
-# ---------------------------------------------------------
-# FastAPI application
-# ---------------------------------------------------------
-
 app = FastAPI(
     title="Sales CRM Source API",
     description=(
         "Simulated Sales CRM source system for "
         "an end-to-end Data Engineering pipeline."
     ),
-    version="1.0.0",
+    version="1.1.0",
 )
 
-
-# ---------------------------------------------------------
-# Helper functions
-# ---------------------------------------------------------
 
 def paginate(
     data,
     page: int,
-    page_size: int
+    page_size: int,
+    base_path: str,
+    updated_since: Optional[str] = None,
 ):
-    """
-    Apply simple page-based pagination.
-    """
-
     start = (page - 1) * page_size
     end = start + page_size
+
+    page_data = data[start:end]
+
+    next_url = None
+
+    if end < len(data):
+        next_page = page + 1
+
+        next_url = (
+            f"{base_path}"
+            f"?page={next_page}"
+            f"&page_size={page_size}"
+        )
+
+        if updated_since:
+            next_url += (
+                "&updated_since="
+                + updated_since
+            )
 
     return {
         "page": page,
         "page_size": page_size,
         "total_records": len(data),
-        "data": data[start:end],
+        "data": page_data,
+        "paging": {
+            "next": next_url
+        },
     }
 
 
@@ -58,13 +69,6 @@ def filter_updated_since(
     data,
     updated_since: Optional[str]
 ):
-    """
-    Return records where updated_at is greater than
-    the supplied watermark.
-
-    If no watermark is provided, return all records.
-    """
-
     if not updated_since:
         return data
 
@@ -72,9 +76,7 @@ def filter_updated_since(
         cutoff = datetime.fromisoformat(
             updated_since.replace("Z", "+00:00")
         )
-
     except ValueError:
-
         raise HTTPException(
             status_code=400,
             detail=(
@@ -87,7 +89,6 @@ def filter_updated_since(
     filtered = []
 
     for record in data:
-
         updated_at = datetime.fromisoformat(
             record["updated_at"].replace(
                 "Z",
@@ -101,53 +102,32 @@ def filter_updated_since(
     return filtered
 
 
-# ---------------------------------------------------------
-# Request models
-# ---------------------------------------------------------
-
 class DealUpdateRequest(BaseModel):
-
     deal_id: int
-
     stage: Optional[str] = None
-
     deal_value: Optional[float] = None
 
 
 class NewDealRequest(BaseModel):
-
     account_id: int
-
     deal_name: str
-
     stage: str
-
     deal_value: float
 
 
 class NewTouchRequest(BaseModel):
-
     account_id: int
-
     touch_date: str
-
     touch_type: str
-
     touch_value: float
-
     sales_rep_id: int
 
 
-# ---------------------------------------------------------
-# General endpoints
-# ---------------------------------------------------------
-
 @app.get("/")
 def root():
-
     return {
         "service": "Sales CRM Source API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "docs": "/docs",
         "health": "/health",
     }
@@ -155,7 +135,6 @@ def root():
 
 @app.get("/health")
 def health():
-
     return {
         "status": "ok"
     }
@@ -163,7 +142,6 @@ def health():
 
 @app.get("/source/status")
 def source_status():
-
     return {
         "accounts": len(accounts),
         "sales_reps": len(sales_reps),
@@ -174,17 +152,12 @@ def source_status():
     }
 
 
-# ---------------------------------------------------------
-# Accounts
-# ---------------------------------------------------------
-
 @app.get("/accounts")
 def get_accounts(
     page: int = 1,
     page_size: int = 100,
     updated_since: Optional[str] = None,
 ):
-
     if page < 1:
         raise HTTPException(
             status_code=400,
@@ -205,20 +178,17 @@ def get_accounts(
     return paginate(
         filtered,
         page,
-        page_size
+        page_size,
+        "/accounts",
+        updated_since,
     )
 
-
-# ---------------------------------------------------------
-# Sales Representatives
-# ---------------------------------------------------------
 
 @app.get("/sales-reps")
 def get_sales_reps(
     page: int = 1,
     page_size: int = 100,
 ):
-
     if page < 1:
         raise HTTPException(
             status_code=400,
@@ -234,13 +204,10 @@ def get_sales_reps(
     return paginate(
         sales_reps,
         page,
-        page_size
+        page_size,
+        "/sales-reps",
     )
 
-
-# ---------------------------------------------------------
-# Deals
-# ---------------------------------------------------------
 
 @app.get("/deals")
 def get_deals(
@@ -248,7 +215,6 @@ def get_deals(
     page_size: int = 100,
     updated_since: Optional[str] = None,
 ):
-
     if page < 1:
         raise HTTPException(
             status_code=400,
@@ -269,13 +235,11 @@ def get_deals(
     return paginate(
         filtered,
         page,
-        page_size
+        page_size,
+        "/deals",
+        updated_since,
     )
 
-
-# ---------------------------------------------------------
-# Touches
-# ---------------------------------------------------------
 
 @app.get("/touches")
 def get_touches(
@@ -283,7 +247,6 @@ def get_touches(
     page_size: int = 100,
     updated_since: Optional[str] = None,
 ):
-
     if page < 1:
         raise HTTPException(
             status_code=400,
@@ -304,13 +267,11 @@ def get_touches(
     return paginate(
         filtered,
         page,
-        page_size
+        page_size,
+        "/touches",
+        updated_since,
     )
 
-
-# ---------------------------------------------------------
-# Deal history
-# ---------------------------------------------------------
 
 @app.get("/deal-history")
 def get_deal_history(
@@ -318,7 +279,6 @@ def get_deal_history(
     page_size: int = 100,
     updated_since: Optional[str] = None,
 ):
-
     if page < 1:
         raise HTTPException(
             status_code=400,
@@ -339,19 +299,16 @@ def get_deal_history(
     return paginate(
         filtered,
         page,
-        page_size
+        page_size,
+        "/deal-history",
+        updated_since,
     )
 
-
-# ---------------------------------------------------------
-# Source-change simulation
-# ---------------------------------------------------------
 
 @app.post("/simulate/update-deal")
 def simulate_update_deal(
     request: DealUpdateRequest
 ):
-
     updated = update_deal(
         request.deal_id,
         request.stage,
@@ -359,7 +316,6 @@ def simulate_update_deal(
     )
 
     if updated is None:
-
         raise HTTPException(
             status_code=404,
             detail=(
@@ -378,7 +334,6 @@ def simulate_update_deal(
 def simulate_new_deal(
     request: NewDealRequest
 ):
-
     new_deal = create_deal(
         request.account_id,
         request.deal_name,
@@ -396,7 +351,6 @@ def simulate_new_deal(
 def simulate_new_touch(
     request: NewTouchRequest
 ):
-
     new_touch = create_touch(
         request.account_id,
         request.touch_date,
@@ -411,14 +365,9 @@ def simulate_new_touch(
     }
 
 
-# ---------------------------------------------------------
-# Failure simulation
-# ---------------------------------------------------------
-
 @app.get("/simulate/failure")
 def simulate_failure():
-
     raise HTTPException(
         status_code=500,
         detail="Simulated source system failure",
-    )
+    )   
